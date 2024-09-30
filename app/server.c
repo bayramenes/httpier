@@ -20,6 +20,12 @@ int main() {
 	int server_fd, client_addr_len;
 	struct sockaddr_in client_addr;
 	
+
+	// Create a socket file descriptor
+	// AF_INET is the address family used for IPv4 addresses
+	// SOCK_STREAM is the socket type for TCP connections
+	// 0 is the protocol value for IP
+
 	server_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (server_fd == -1) {
 		printf("Socket creation failed: %s...\n", strerror(errno));
@@ -33,6 +39,11 @@ int main() {
 		printf("SO_REUSEADDR failed: %s \n", strerror(errno));
 		return 1;
 	}
+
+	// creates a socket address structure
+	// htons and htonl convert the port number and IP address to network byte order
+	// INADDR_ANY means that the socket will listen on all network interfaces 0.0.0.0
+	// AF_INET is the address family used for IPv4 addresses
 	
 	struct sockaddr_in serv_addr = { .sin_family = AF_INET ,
 									 .sin_port = htons(4221),
@@ -44,6 +55,11 @@ int main() {
 		return 1;
 	}
 	
+
+	// The listen system call allows the process to listen on the socket for connections
+	// If a connection request arrives when the queue is full, the client may receive an error
+	// The backlog argument defines the maximum length to which the queue of pending connections for server_fd may grow
+
 	int connection_backlog = 5;
 	if (listen(server_fd, connection_backlog) != 0) {
 		printf("Listen failed: %s \n", strerror(errno));
@@ -55,7 +71,13 @@ int main() {
 	
 	accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
 	printf("Client connected\n");
-	
+
+	printf("Sending 200 OK\n");
+
+	// Send the response
+
+	char *response = "HTTP/1.1 200 OK\r\n\r\n";
+	send(server_fd, response, strlen(response), 0);
 	close(server_fd);
 
 	return 0;
