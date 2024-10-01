@@ -6,6 +6,19 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include "helpers.h"
+#include <arpa/inet.h>
+#include <fcntl.h>
+
+
+
+
+// -----------------------
+char * path_extractor(char * request);
+hash_table* request_parser(char * request);
+hash_table* header_parser(char * request);
+// -----------------------
+
 
 int main() {
 	// Disable output buffering
@@ -69,16 +82,86 @@ int main() {
 	printf("Waiting for a client to connect...\n");
 	client_addr_len = sizeof(client_addr);
 	
+
+	// for each client we have a file descriptor that we will be using to communicate with the client
+	// accept system call returns a new socket file descriptor for the accepted connection
+
 	int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
-	printf("Client connected\n");
 
-	printf("Sending 200 OK\n");
+	// log the client's IP address and port
 
-	// Send the response
+	char ip[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &(client_addr.sin_addr), ip, INET_ADDRSTRLEN); // convert IP address to string
+	printf("Connection from %s:%d\n", ip, ntohs(client_addr.sin_port));
 
-	char *response = "HTTP/1.1 200 OK\r\n\r\n";
-	int bytes_sent_num = send(client_fd, response, strlen(response), 0);
+	char * request = request_reciever(client_fd);
+	printf("Request: %s\n", request);
+	hash_table * request_table = request_parser(request);
+
+	// check if path is valid
+	char * path = SearchItem(request_table,"path");
+	short path_exists = pathExists(path);
+	if (path_exists == 0){
+		char * response = "HTTP/1.1 404 Not Found\r\n\r\n";
+		int bytes_sent_num = send(client_fd, response, strlen(response), 0);
+	}
+	else{
+		char *response = "HTTP/1.1 200 OK\r\n\r\n";
+		int bytes_sent_num = send(client_fd, response, strlen(response), 0);
+	}
+
+
+
+	free(request);
 	close(server_fd);
-
 	return 0;
+}
+
+
+
+
+
+hash_table* request_parser(char * request){
+	// we will create a hash table to store the request line and the request headers
+	// note that we cant use strtok to parse the request line and the headers because it will move to the next token making it not possible to parse the headers
+
+
+	hash_table * request_table = CreateHashTable(20);
+	
+	char * request_line = strtok(request,"\r\n");
+	// we will parse the first line
+	if (request_line != NULL){
+		int len = strlen(request_line); // we have to store it before hand because we will be changing the string
+		for(int i = 0 ; i < len; i++){
+			if(request_line[i] == ' ' || request_line[i] == '\r'){
+				request_line[i] = '\0';
+			}
+		}
+
+		char * method = request_line;
+		char * path = request_line + strlen(method) + 1;
+		char * version = path + strlen(path) + 1;
+
+
+		InsertItem(request_table,"method",method);
+		InsertItem(request_table,"path",path);
+		InsertItem(request_table,"version",version);
+	}
+
+
+	// we will parse the headers
+	request_line = strtok(NULL,"\r\n");
+	while (request_line != NULL){
+		for(int i = 0 ; i < strlen(request_line); i++){
+			if(request_line[i] == ':'){
+				request_line[i] = '\0';
+				break;
+			}
+		}
+		char * key = request_line;
+		char * value = key + strlen(key) + 1 + 1; // +1 for the colon and +1 for the space
+		InsertItem(request_table,key,value);
+		request_line = strtok(NULL,"\r\n");
+	}
+	return request_table;
 }
